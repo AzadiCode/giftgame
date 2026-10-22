@@ -30,6 +30,7 @@ if MONGO_URI:
     db.users.create_index("telegram_id", unique=True)
     db.transactions.create_index([("telegram_id", 1), ("created_at", -1)])
     db.game_rounds.create_index([("telegram_id", 1), ("created_at", -1)])
+    db.crash_rounds.create_index([("telegram_id", 1), ("status", 1)])
     db.daily_actions.create_index([("telegram_id", 1), ("day", 1), ("action", 1)], unique=True)
 else:
     # Explicit development mode; data is in-memory and is lost on restart.
@@ -201,29 +202,91 @@ def spin():
     tx(tid, reward, "daily_spin", "جایزه گردونه روزانه", updated["balance"])
     return jsonify(reward=reward, user=safe_user(updated), message=f"{reward} سکه به موجودی مجازی اضافه شد.")
 
-@app.post("/api/game/crash")
-def crash_game():
+@app.post("/api/game/crash/start")
+def crash_start():
+    """Start a virtual-credit Crash round. The server owns the bust point and balance."""
     tg_user, err = require_user()
     if err: return err
     body = request.get_json(silent=True) or {}
     try: bet = int(body.get("bet", 10))
-    except (TypeError, ValueError): return jsonify(error="مقدار شرط معتبر نیست."), 400
+    except (TypeError, ValueError): return jsonify(error="مبلغ بازی معتبر نیست."), 400
     if bet < 1 or bet > 10000: return jsonify(error="مبلغ باید بین ۱ تا ۱۰٬۰۰۰ سکه باشد."), 400
     tid = int(tg_user["id"]); u = ensure_user(tg_user)
-    if int(u["balance"]) < bet: return jsonify(error="موجودی مجازی کافی نیست."), 400
-    # Demo-only round: server determines outcome. No real-money wagering.
-    bust = round(1.0 + (secrets.randbelow(500) / 100), 2)
-    cashout = float(body.get("cashout", 1.5))
-    cashout = min(max(cashout, 1.01), 10.0)
-    won = cashout <= bust
-    payout = int(bet * cashout) if won else 0
-    delta = payout - bet
+    active = db.crash_rounds.find_one({"telegram_id": tid, "status": "active"})
+    if active: return jsonify(error="یک دور Crash در حال اجرا داری."), 409
     updated = db.users.find_one_and_update({"telegram_id": tid, "balance": {"$gte": bet}},
-        {"$inc": {"balance": delta, "xp": 2}}, return_document=ReturnDocument.AFTER)
-    if not updated: return jsonify(error="موجودی تغییر کرده؛ دوباره تلاش کن."), 409
-    tx(tid, delta, "crash_win" if won else "crash_loss", f"Crash دمو؛ ضریب هدف {cashout:.2f}x، ضریب سقوط {bust:.2f}x", updated["balance"])
-    db.game_rounds.insert_one({"telegram_id": tid, "game": "crash", "bet": bet, "cashout": cashout, "bust": bust, "won": won, "delta": delta, "created_at": utcnow()})
-    return jsonify(won=won, bust=bust, cashout=cashout, delta=delta, user=safe_user(updated), message=(f"بردی! +{delta} سکه مجازی" if won else f"این دور باختی؛ {bet} سکه مجازی کم شد."))
+        {"$inc": {"balance": -bet}}, return_document=ReturnDocument.AFTER)
+    if not updated: return jsonify(error="موجودی مجازی کافی نیست."), 400
+    # Server-only bust point; client cannot choose or alter the outcome.
+    bust = round(1.0 + (secrets.randbelow(500) / 100), 2)
+    round_id = secrets.token_urlsafe(16)
+    now = time.time()
+    db.crash_rounds.insert_one({"round_id": round_id, "telegram_id": tid, "bet": bet,
+        "bust": bust, "started_at": now, "status": "active", "created_at": utcnow()})
+    tx(tid, -bet, "crash_bet", "Crash دمو؛ شروع دور", updated["balance"])
+    return jsonify(round_id=round_id, bet=bet, started_at=now, user=safe_user(updated), message="دور شروع شد! قبل از سقوط خارج شو.")
+
+def crash_multiplier(started_at):
+    elapsed = max(0.0, time.time() - float(started_at))
+    return round(min(10.0, max(1.0, 1.0 + elapsed * 0.22 + elapsed * elapsed * 0.025)), 2)
+
+def settle_crash_loss(round_doc, tid, current_user_doc):
+    claimed = db.crash_rounds.find_one_and_update(
+        {"_id": round_doc["_id"], "status": "active"},
+        {"$set": {"status": "busted", "settled_at": utcnow()}}, return_document=ReturnDocument.AFTER)
+    if not claimed:
+        return None
+    updated = db.users.find_one_and_update({"telegram_id": tid}, {"$inc": {"xp": 2}}, return_document=ReturnDocument.AFTER)
+    bust = float(round_doc["bust"]); bet = int(round_doc["bet"])
+    tx(tid, 0, "crash_loss", f"Crash دمو؛ سقوط در {bust:.2f}x", updated["balance"])
+    db.game_rounds.insert_one({"telegram_id": tid, "game": "crash", "bet": bet, "cashout": None,
+        "bust": bust, "won": False, "delta": -bet, "created_at": utcnow()})
+    return jsonify(status="busted", bust=bust, multiplier=bust, delta=-bet, user=safe_user(updated), message=f"سقوط در {bust:.2f}x؛ این دور را باختی.")
+
+@app.get("/api/game/crash/status")
+def crash_status():
+    tg_user, err = require_user()
+    if err: return err
+    tid = int(tg_user["id"]); ensure_user(tg_user)
+    rnd = db.crash_rounds.find_one({"telegram_id": tid, "status": "active"})
+    if not rnd: return jsonify(active=False)
+    multiplier = crash_multiplier(rnd["started_at"])
+    if multiplier >= float(rnd["bust"]):
+        result = settle_crash_loss(rnd, tid, None)
+        if result is not None: return result
+        return jsonify(active=False, status="settled")
+    return jsonify(active=True, round_id=rnd["round_id"], bet=int(rnd["bet"]), multiplier=multiplier, elapsed=max(0.0, time.time() - float(rnd["started_at"])))
+
+@app.post("/api/game/crash/cashout")
+def crash_cashout():
+    tg_user, err = require_user()
+    if err: return err
+    tid = int(tg_user["id"]); ensure_user(tg_user)
+    rnd = db.crash_rounds.find_one({"telegram_id": tid, "status": "active"})
+    if not rnd: return jsonify(error="دور فعالی برای خروج وجود ندارد."), 409
+    multiplier = crash_multiplier(rnd["started_at"])
+    if multiplier >= float(rnd["bust"]):
+        result = settle_crash_loss(rnd, tid, None)
+        if result is not None: return result
+        return jsonify(error="این دور قبلاً تمام شده است."), 409
+    claimed = db.crash_rounds.find_one_and_update(
+        {"_id": rnd["_id"], "status": "active"},
+        {"$set": {"status": "cashed_out", "cashout": multiplier, "settled_at": utcnow()}},
+        return_document=ReturnDocument.AFTER)
+    if not claimed: return jsonify(error="این دور قبلاً تمام شده است."), 409
+    bet = int(rnd["bet"]); payout = int(bet * multiplier)
+    updated = db.users.find_one_and_update({"telegram_id": tid}, {"$inc": {"balance": payout, "xp": 2}}, return_document=ReturnDocument.AFTER)
+    delta = payout - bet
+    tx(tid, payout, "crash_win", f"Crash دمو؛ خروج در {multiplier:.2f}x", updated["balance"])
+    db.game_rounds.insert_one({"telegram_id": tid, "game": "crash", "bet": bet, "cashout": multiplier,
+        "bust": float(rnd["bust"]), "won": True, "delta": delta, "created_at": utcnow()})
+    return jsonify(status="cashed_out", won=True, bust=float(rnd["bust"]), cashout=multiplier,
+        payout=payout, delta=delta, user=safe_user(updated), message=f"خروج موفق در {multiplier:.2f}x؛ سود خالص {delta} سکه مجازی!")
+
+# Compatibility endpoint for older clients. New clients use start/status/cashout.
+@app.post("/api/game/crash")
+def crash_game_legacy():
+    return jsonify(error="نسخه بازی به‌روزرسانی شده؛ صفحه را تازه‌سازی کن."), 410
 
 @app.post("/api/game/mines")
 def mines_game():

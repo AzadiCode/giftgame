@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#080a12"><title>XZ GIFT — بازی کن، جایزه بگیر</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+<div class="mode-gate" id="mode-gate" aria-hidden="false">
+  <section class="mode-panel">
+    <div class="mode-logo">✦</div><span class="eyebrow">WELCOME TO THE NEXT LEVEL</span>
+    <h1>چطور می‌خوای بازی کنی؟</h1><p>حالت بازی رو انتخاب کن؛ هر زمان خواستی می‌تونی تغییرش بدی.</p>
+    <button class="mode-choice virtual-choice" id="choose-virtual"><span class="mode-icon">🪙</span><span class="mode-copy"><b>بازی با سکه مجازی</b><small>رایگان · قابل بازی همین حالا</small></span><span class="mode-arrow">←</span></button>
+    <button class="mode-choice ton-choice" id="choose-ton"><span class="mode-icon">💎</span><span class="mode-copy"><b>بازی با TON واقعی</b><small>اتصال کیف پول و پرداخت · در حال آماده‌سازی</small></span><span class="mode-arrow">⌁</span></button>
+    <small class="mode-note">در نسخه فعلی فقط حالت سکه مجازی فعال است. واریز، برداشت یا شرط‌بندی با TON تا زمان تکمیل و بررسی زیرساخت مالی فعال نیست.</small>
+  </section>
+</div>
+<header class="topbar">
+  <div class="brand"><div class="brand-mark">✦</div><div><b>XZ <span>GIFT</span></b><small>PLAY • LEVEL UP • REPEAT</small></div></div>
+  <button class="avatar" id="avatar">TB</button>
+</header>
+<main>
+<section class="welcome"><div><span class="eyebrow">خوش اومدی به دنیای بازی</span><h1>هر بازی، یک <em>ماجراجویی</em></h1><p>بازی کن، مأموریت انجام بده و سکه جمع کن.</p></div><div class="rocket">🚀</div></section>
+<section class="balance-card">
+  <div class="balance-head"><div><small id="balance-caption">موجودی مجازی تو</small><div class="balance-value"><span class="coin">✦</span><strong id="balance">—</strong><small>سکه</small></div></div><div class="level-badge"><span>LVL</span><b id="level">1</b></div></div>
+  <div class="balance-foot"><span><i></i> حساب آماده بازی</span><span id="xp">۰ XP</span></div>
+</section>
+<section class="section-head"><div><span class="eyebrow">انتخاب کن و شروع کن</span><h2>بازی‌های ویژه</h2></div><button class="mode-switch" id="mode-switch">🪙 سکه مجازی ▾</button></section>
+<section class="games-grid">
+  <button class="game-card crash" data-game="crash"><div class="game-art">🚀<span class="orbit"></span></div><div class="game-info"><b>CRASH</b><small>قبل از سقوط خارج شو</small><span class="play-arrow">←</span></div></button>
+  <button class="game-card mines" data-game="mines"><div class="game-art">💣<span class="spark">✦</span></div><div class="game-info"><b>MINES</b><small>خانه امن رو پیدا کن</small><span class="play-arrow">←</span></div></button>
+  <button class="game-card spin" data-game="spin"><div class="game-art">🎁<span class="orbit"></span></div><div class="game-info"><b>DAILY SPIN</b><small>جایزه روزانه رایگان</small><span class="play-arrow">←</span></div></button>
+  <button class="game-card arena" data-game="arena"><div class="game-art">⚔️<span class="spark">✦</span></div><div class="game-info"><b>ARENA</b><small>به‌زودی • رقابت دوستانه</small><span class="play-arrow">←</span></div></button>
+</section>
+<section class="promo-card"><div class="promo-icon">🏆</div><div><b>هر روز قوی‌تر شو</b><p>با بازی روزانه XP جمع کن و سطح خودت رو بالا ببر.</p></div><span class="promo-glow"></span></section>
+<section class="section-head history-head"><div><span class="eyebrow">آخرین فعالیت‌ها</span><h2>تاریخچه</h2></div><button class="text-button" id="refresh">بروزرسانی ↻</button></section>
+<section class="history" id="history"><div class="empty">هنوز فعالیتی ثبت نشده.</div></section>
+</main>
+<nav class="bottom-nav">
+<button class="nav-item active" data-tab="games"><span>⌂</span>بازی‌ها</button>
+<button class="nav-item" data-tab="leaderboard"><span>♛</span>رتبه‌بندی</button>
+<button class="nav-item" data-tab="profile"><span>♙</span>پروفایل</button>
+</nav>
+<div class="modal-backdrop" id="modal" aria-hidden="true"><section class="modal"><button class="close" id="close">×</button><div class="modal-symbol" id="modal-symbol">🚀</div><span class="eyebrow" id="modal-kicker">بازی ویژه</span><h2 id="modal-title">CRASH</h2><p id="modal-desc">مبلغ بازی رو انتخاب کن.</p>
+<div id="bet-controls" class="bet-controls"><label>مبلغ سکه<input id="bet" type="number" min="1" max="10000" value="10" inputmode="numeric"></label><div class="quick-bets"><button data-bet="10">10</button><button data-bet="50">50</button><button data-bet="100">100</button><button data-bet="250">250</button></div></div>
+<div id="crash-live" class="crash-live hidden" aria-live="polite">
+  <div class="crash-live-top"><span>ضریب لحظه‌ای</span><strong id="crash-multiplier">1.00x</strong></div>
+  <div class="crash-track"><div class="crash-track-grid"></div><div class="crash-rocket" id="crash-rocket">🚀</div><div class="crash-track-line" id="crash-track-line"></div></div>
+  <small id="crash-live-status">برای شروع، مبلغ بازی را وارد کن.</small>
+  <button class="cashout-button hidden" id="cashout-now">💰 خروج و دریافت جایزه</button>
+</div>
+<div id="cashout-controls" class="field"><label>ضریب خروج هدف</label><div class="stepper"><button id="cashout-down">−</button><strong id="cashout-label">1.50x</strong><button id="cashout-up">+</button></div></div>
+<div id="mines-controls" class="field hidden"><label>تعداد خانه‌های انتخابی</label><div class="stepper"><button id="picks-down">−</button><strong id="picks-label">2 خانه</strong><button id="picks-up">+</button></div></div>
+<div id="result" class="result hidden"></div><button class="primary-button" id="play">شروع بازی <span>←</span></button><small class="disclaimer" id="game-disclaimer">این نسخه آزمایشی از سکه مجازی استفاده می‌کند؛ واریز و برداشت واقعی فعال نیست.</small></section></div>
+<div class="toast" id="toast"></div>
+<script src="/static/app.js"></script>
+</body></html>

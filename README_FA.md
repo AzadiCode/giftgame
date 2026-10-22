@@ -27,24 +27,44 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
 ```
-متغیرهای محیطی را در ترمینال تنظیم کن؛ Flask به‌صورت خودکار فایل `.env` را نمی‌خواند. سپس:
+متغیرهای محیطی را در ترمینال تنظیم کن؛ Flask به‌صورت خودکار فایل تنظیمات نمی‌خواند. سپس:
 ```bash
+# Linux/macOS
 export BOT_TOKEN=""
 export BASE_URL="http://localhost:10000"
 python app.py
 ```
+در ویندوز PowerShell به‌جای `export` از `$env:BOT_TOKEN=""` و `$env:BASE_URL="http://localhost:10000"` استفاده کن.
 وقتی `BOT_TOKEN` خالی باشد، حالت توسعه با کاربر آزمایشی فعال است. **این حالت فقط برای تست محلی است**؛ قبل از استقرار حتماً `BOT_TOKEN` و `MONGO_URI` واقعی را تنظیم کن. با `BOT_TOKEN` تنظیم‌شده، درخواست‌ها بدون `X-Telegram-Init-Data` معتبر رد می‌شوند.
 
-## راه‌اندازی در تلگرام
-1. یک ربات با BotFather بساز و توکن آن را در متغیر `BOT_TOKEN` قرار بده.
-2. پروژه را روی سرویس دارای HTTPS مستقر کن و `BASE_URL` را دقیقاً برابر آدرس عمومی قرار بده.
-3. `MONGO_URI` را به MongoDB دائمی متصل کن.
-4. در BotFather دامنه‌ی Mini App را ثبت و یک Web App با URL مربوطه تعریف کن.
-5. این نسخه در زمان شروع سرویس، وب‌هوک تلگرام را روی مسیر `/telegram/webhook` ثبت می‌کند و دکمه‌ی منوی مینی‌اپ را تنظیم می‌کند. فرمان `/start` باید پیام خوش‌آمد و دکمه‌ی «باز کردن XZ GIFT» را بفرستد.
-6. در Render مطمئن شو `BOT_TOKEN` توکن همان ربات و `BASE_URL` آدرس عمومی دقیق با `https://` است. بعد از ذخیره Environment Variables، سرویس را دستی Deploy/Restart کن.
-7. بررسی کن `https://YOUR_DOMAIN/health` پاسخ `{"status":"ok",...}` بدهد و در لاگ Render عبارت `Telegram webhook configured` را ببینی.
+## استقرار در Render از طریق داشبورد (بدون فایل‌های تنظیمات اضافی)
+این پروژه برای استقرار به فایل `render.yaml` یا `.env.example` نیاز ندارد. در GitHub کافی است فایل‌های اصلی پروژه را آپلود کنی. سپس در داشبورد Render سرویس Web Service بساز و این تنظیمات را وارد کن:
+
+- **Runtime:** Python 3
+- **Build Command:** `pip install -r requirements.txt`
+- **Start Command:** `gunicorn app:app --workers 2 --threads 4 --timeout 90`
+
+در بخش **Environment Variables** این متغیرها را اضافه کن:
+
+| نام | مقدار |
+|---|---|
+| `BOT_TOKEN` | توکن واقعی ربات از BotFather |
+| `BASE_URL` | آدرس عمومی سرویس Render با `https://` و بدون `/` انتهایی |
+| `MONGO_URI` | آدرس اتصال MongoDB دائمی |
+| `MONGO_DB` | `xzgift` |
+| `ADMIN_IDS` | شناسه عددی تلگرام مدیر؛ چند شناسه را با کاما جدا کن |
+| `STARTING_BALANCE` | `1000` |
+| `DAILY_SPIN_REWARD_MIN` | `10` |
+| `DAILY_SPIN_REWARD_MAX` | `150` |
+| `INIT_DATA_MAX_AGE` | `86400` |
+| `PORT` | معمولاً لازم نیست دستی تنظیم شود؛ Render آن را فراهم می‌کند |
+| `LOG_LEVEL` | `INFO` |
+| `TELEGRAM_WEBHOOK_SECRET` | اختیاری؛ می‌توانی خالی بگذاری تا از `BOT_TOKEN` ساخته شود |
+
+مقادیر نمونه را عیناً برای توکن و دیتابیس استفاده نکن. پس از ذخیره متغیرها، Deploy/Restart کن. هنگام شروع سرویس، وب‌هوک تلگرام روی مسیر `/telegram/webhook` ثبت می‌شود و دکمه‌ی منوی مینی‌اپ تنظیم می‌شود؛ فرمان `/start` باید پیام خوش‌آمد و دکمه‌ی «باز کردن XZ GIFT» را بفرستد.
+
+برای بررسی، آدرس `https://YOUR_DOMAIN/health` را باز کن؛ باید پاسخی با وضعیت `ok` دریافت کنی. در لاگ سرویس نیز عبارت `Telegram webhook configured` را بررسی کن.
 
 ## APIها
 - `GET /api/me` — پروفایل و ۸ تراکنش اخیر
