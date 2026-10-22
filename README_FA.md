@@ -42,8 +42,9 @@ python app.py
 2. پروژه را روی سرویس دارای HTTPS مستقر کن و `BASE_URL` را دقیقاً برابر آدرس عمومی قرار بده.
 3. `MONGO_URI` را به MongoDB دائمی متصل کن.
 4. در BotFather دامنه‌ی Mini App را ثبت و یک Web App با URL مربوطه تعریف کن.
-5. چون این پروژه در حال حاضر وب‌هوک خودکار ربات مادر را ثبت نمی‌کند، برای عرضه‌ی دکمه‌ی منو باید یک endpoint/اسکریپت جدا برای تنظیم Menu Button یا فرمان `/start` اضافه شود. فعلاً URL مینی‌اپ را از منوی Web App ربات باز کن.
-6. بررسی کن `https://YOUR_DOMAIN/health` پاسخ `{"status":"ok",...}` بدهد.
+5. این نسخه در زمان شروع سرویس، وب‌هوک تلگرام را روی مسیر `/telegram/webhook` ثبت می‌کند و دکمه‌ی منوی مینی‌اپ را تنظیم می‌کند. فرمان `/start` باید پیام خوش‌آمد و دکمه‌ی «باز کردن XZ GIFT» را بفرستد.
+6. در Render مطمئن شو `BOT_TOKEN` توکن همان ربات و `BASE_URL` آدرس عمومی دقیق با `https://` است. بعد از ذخیره Environment Variables، سرویس را دستی Deploy/Restart کن.
+7. بررسی کن `https://YOUR_DOMAIN/health` پاسخ `{"status":"ok",...}` بدهد و در لاگ Render عبارت `Telegram webhook configured` را ببینی.
 
 ## APIها
 - `GET /api/me` — پروفایل و ۸ تراکنش اخیر

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """XZ GIFT — Telegram Mini App starter. Virtual credits only; no real-money deposits/withdrawals."""
-import os, hmac, hashlib, json, time, secrets, logging
+import os, hmac, hashlib, json, time, secrets, logging, re
+import requests
 from datetime import datetime, timezone, date
 from urllib.parse import parse_qsl
 from flask import Flask, request, jsonify, send_from_directory
@@ -18,6 +19,9 @@ STARTING_BALANCE = int(os.getenv("STARTING_BALANCE", "1000"))
 DAILY_SPIN_REWARD_MIN = int(os.getenv("DAILY_SPIN_REWARD_MIN", "10"))
 DAILY_SPIN_REWARD_MAX = int(os.getenv("DAILY_SPIN_REWARD_MAX", "150"))
 INIT_DATA_MAX_AGE = int(os.getenv("INIT_DATA_MAX_AGE", "86400"))
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+if BOT_TOKEN and not TELEGRAM_WEBHOOK_SECRET:
+    TELEGRAM_WEBHOOK_SECRET = hashlib.sha256(("xzgift-webhook:" + BOT_TOKEN).encode()).hexdigest()[:40]
 
 mongo = None
 if MONGO_URI:
@@ -106,6 +110,62 @@ def index():
 @app.get("/health")
 def health():
     return jsonify(status="ok", storage="mongodb" if MONGO_URI else "temporary-memory")
+
+@app.post("/telegram/webhook")
+def telegram_webhook():
+    """Respond to /start and open the Mini App. Telegram calls this endpoint via webhook."""
+    if not BOT_TOKEN:
+        return "bot token not configured", 503
+    supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not hmac.compare_digest(supplied, TELEGRAM_WEBHOOK_SECRET):
+        return "forbidden", 403
+    update = request.get_json(silent=True) or {}
+    msg = update.get("message") or update.get("edited_message") or {}
+    chat = msg.get("chat") or {}
+    text = (msg.get("text") or "").strip()
+    if chat.get("type") == "private" and text.split("@", 1)[0].split(" ", 1)[0] == "/start":
+        if not BASE_URL.startswith("https://"):
+            log.error("BASE_URL must be the public HTTPS Render URL for Telegram Mini App")
+            return "ok"
+        payload = {
+            "chat_id": chat.get("id"),
+            "text": "🎁 سلام! به XZ GIFT خوش اومدی. برای ورود به مینی‌اپ روی دکمه زیر بزن.",
+            "reply_markup": {"inline_keyboard": [[{"text": "🚀 باز کردن XZ GIFT", "web_app": {"url": BASE_URL}}]]}
+        }
+        try:
+            response = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json=payload, timeout=12)
+            if response.status_code >= 400 or not response.json().get("ok"):
+                log.error("Telegram sendMessage failed: %s", response.text[:300])
+        except Exception:
+            log.exception("Telegram sendMessage request failed")
+    return "ok"
+
+def setup_telegram_webhook():
+    """Register webhook on deployment startup; Telegram bot /start won't work without this."""
+    if not BOT_TOKEN:
+        log.warning("BOT_TOKEN is empty: Telegram /start webhook is disabled")
+        return
+    if not BASE_URL.startswith("https://"):
+        log.warning("BASE_URL must be the public HTTPS URL; skipping webhook setup")
+        return
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
+            json={"url": f"{BASE_URL}/telegram/webhook",
+                  "secret_token": TELEGRAM_WEBHOOK_SECRET,
+                  "allowed_updates": ["message"]}, timeout=15)
+        data = response.json()
+        if not data.get("ok"):
+            log.error("Telegram setWebhook failed: %s", data)
+        else:
+            log.info("Telegram webhook configured: %s/telegram/webhook", BASE_URL)
+        # Also expose the Mini App from the bot's menu button.
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/setChatMenuButton",
+            json={"menu_button": {"type": "web_app", "text": "باز کردن مینی‌اپ",
+                                   "web_app": {"url": BASE_URL}}}, timeout=12)
+    except Exception:
+        log.exception("Could not configure Telegram webhook")
 
 @app.get("/api/me")
 def api_me():
@@ -209,4 +269,8 @@ def internal_error(e):
     return jsonify(error="خطای داخلی سرور؛ گزارش سرور را بررسی کنید."), 500
 
 if __name__ == "__main__":
+    setup_telegram_webhook()
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), debug=False)
+else:
+    # Gunicorn imports app:app; configure the webhook during service startup.
+    setup_telegram_webhook()
